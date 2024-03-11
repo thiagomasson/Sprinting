@@ -6,6 +6,7 @@ Everything in the mod is configurable.
 Generic Mod Config Menu is highly recommended to configure while in-game.
 
 # Installation
+Install SMAPI.
 Unzip the mod folder inside your Mods folder. To uninstall, delete the folder
 
 # License
