@@ -1,8 +1,10 @@
 ﻿using GenericModConfigMenu;
+using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewModdingAPI.Utilities;
 using StardewValley;
+using StardewValley.Buffs;
 using System;
 
 namespace Sprinting
@@ -19,12 +21,11 @@ namespace Sprinting
         private PerScreen<float> _lastEnergy = new();
         private bool _staminaWarned = false;
         private bool _sprintOn = false;
-        private int _buffId;
+        private string _buffId = "onemix.Sprinting_sprinting";
 
         public override void Entry(IModHelper helper)
         {
             Instance = this;
-            this._buffId = Instance.ModManifest.UniqueID.GetHashCode();
             Config = Helper.ReadConfig<ModConfig>();
             helper.Events.GameLoop.GameLaunched += new EventHandler<GameLaunchedEventArgs>(this.OnGameLaunched);
             helper.Events.GameLoop.OneSecondUpdateTicked += new EventHandler<OneSecondUpdateTickedEventArgs>(this.OnOneSecondUpdateTicked);
@@ -205,17 +206,20 @@ namespace Sprinting
 
         private void ApplySprintBuff()
         {
-            Game1.buffsDisplay.addOtherBuff(
-                new Buff( 0, 0, 0, 0, 0, 0, 0, 0, 0, Config.SpeedBoost, 0, 0, 1, "Sprinting", GetFromi18n("buff.sprinting.desc"))
+            Buff buff = new(
+                id: _buffId,
+                displayName: "Sprinting",
+                description: GetFromi18n("buff.sprinting.desc"),
+                iconTexture: this.Helper.ModContent.Load<Texture2D>("assets/sprinting.png"),
+                iconSheetIndex: 0,
+                duration: 100,
+                effects: new BuffEffects()
                 {
-                    which = this._buffId,
-                    millisecondsDuration = 100
-                });
-        }
+                    Speed = { Config.SpeedBoost }
+                }
+            );
 
-        private void RemoveSprintBuff()
-        {
-            Game1.buffsDisplay.removeOtherBuff(this._buffId);
+            Game1.player.applyBuff(buff);
         }
 
         private void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
@@ -225,9 +229,9 @@ namespace Sprinting
 
             Farmer player = Game1.player;
 
-            if (player.hasBuff(this._buffId) && !player.isMoving())
-                this.RemoveSprintBuff();
-            else if (player.isMoving() && _sprintOn && CanSprint(player))
+            //if (player.hasBuff(this._buffId) && !player.isMoving())
+                //this.RemoveSprintBuff();
+            if (player.isMoving() && _sprintOn && CanSprint(player))
                 this.ApplySprintBuff();
 
             if (player.Stamina <= Config.EnergyToWarn && Config.SprintingKey.IsDown() && !this._staminaWarned && Config.LowEnergyWarning)
