@@ -229,8 +229,6 @@ namespace Sprinting
 
             Farmer player = Game1.player;
 
-            //if (player.hasBuff(this._buffId) && !player.isMoving())
-                //this.RemoveSprintBuff();
             if (player.isMoving() && _sprintOn && CanSprint(player))
                 this.ApplySprintBuff();
 
@@ -265,7 +263,7 @@ namespace Sprinting
 
             this._lastEnergy.Value = player.Stamina;
 
-            if (!player.hasBuff(this._buffId))
+            if (!player.hasBuff(this._buffId) || !player.isMoving() || !Context.IsPlayerFree)
                 return;
 
             float energyDrainPerSecond = Config.EnergyDrainPerSecond;
