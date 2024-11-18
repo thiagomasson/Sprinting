@@ -6,6 +6,7 @@ using StardewModdingAPI.Utilities;
 using StardewValley;
 using StardewValley.Buffs;
 using System;
+using System.Linq;
 
 namespace Sprinting
 {
@@ -189,8 +190,8 @@ namespace Sprinting
 
             if (Config.SprintingKey.JustPressed() && Config.KeyIsToggle)
                 _sprintOn = !_sprintOn;
-            else if (Config.SprintingKey.IsDown() && player.isMoving() && CanSprint(player))
-                this.ApplySprintBuff();
+            else if (Config.SprintingKey.IsDown())
+                ApplySprintBuff(player);
         }
 
         public static bool CanSprint(Farmer player)
@@ -201,25 +202,42 @@ namespace Sprinting
             if (!Config.CanSprintExhausted && player.exhausted.Value)
                 return false;
 
+            if (!player.isMoving())
+                return false;
+
             return player.Stamina >= Config.MinimumEnergyToSprint;
         }
 
-        private void ApplySprintBuff()
-        {
-            Buff buff = new(
-                id: _buffId,
-                displayName: "Sprinting",
-                description: GetFromi18n("buff.sprinting.desc"),
-                iconTexture: this.Helper.ModContent.Load<Texture2D>("assets/sprinting.png"),
-                iconSheetIndex: 0,
-                duration: 100,
-                effects: new BuffEffects()
-                {
-                    Speed = { Config.SpeedBoost }
-                }
-            );
+        private Buff _sprintBuff;
 
-            Game1.player.applyBuff(buff);
+        private void ApplySprintBuff(Farmer player)
+        {
+            if (CanSprint(player))
+            {
+                _sprintBuff ??= new Buff(
+                    id: _buffId,
+                    displayName: "Sprinting",
+                    description: GetFromi18n("buff.sprinting.desc"),
+                    iconTexture: this.Helper.ModContent.Load<Texture2D>("assets/sprinting.png"),
+                    iconSheetIndex: 0,
+                    duration: 100,
+                    effects: new BuffEffects()
+                    {
+                        Speed = { Config.SpeedBoost }
+                    }
+                );
+
+                Buff buff = Game1.buffsDisplay.GetSortedBuffs().Where(x => x.id == _buffId).FirstOrDefault();
+                if (buff is not null)
+                {
+                    buff.millisecondsDuration = 100;
+                }
+                else
+                {
+                    _sprintBuff.millisecondsDuration = 100;
+                    player.applyBuff(_sprintBuff);
+                }
+            }
         }
 
         private void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
@@ -229,20 +247,8 @@ namespace Sprinting
 
             Farmer player = Game1.player;
 
-            if (player.isMoving() && _sprintOn && CanSprint(player))
-                this.ApplySprintBuff();
-
-            if (player.Stamina <= Config.EnergyToWarn && Config.SprintingKey.IsDown() && !this._staminaWarned && Config.LowEnergyWarning)
-            {
-                Game1.addHUDMessage(new HUDMessage(GetFromi18n("message.lowenergy"), HUDMessage.error_type));
-                //this.Monitor.Log("Low stamina warning message displayed", LogLevel.Trace);
-                this._staminaWarned = true;
-            }
-            else if (player.Stamina >= Config.EnergyToWarn * 1.4 && this._staminaWarned && Config.LowEnergyWarning)
-            {
-                this._staminaWarned = false;
-                //this.Monitor.Log("Reseted low stamina warning message", LogLevel.Trace);
-            }
+            if (_sprintOn)
+                ApplySprintBuff(player);
 
             bool canRegen = Context.IsMultiplayer ? Game1.currentLocation != null : Context.IsPlayerFree;
 
@@ -254,16 +260,16 @@ namespace Sprinting
 
                 if (currentEnergyRatio < Config.MaxEnergyRegen && Config.EnergyRegenRate > 0f)
                 {
-                    if (player.Stamina < this._lastEnergy.Value)
-                        this._energyRegenTimer.Value = Config.EnergyRegenCooldown;
-                    else if (this._energyRegenTimer.Value <= 0)
+                    if (player.Stamina < _lastEnergy.Value)
+                        _energyRegenTimer.Value = Config.EnergyRegenCooldown;
+                    else if (_energyRegenTimer.Value <= 0)
                         player.Stamina = Math.Min(player.MaxStamina, player.Stamina + player.MaxStamina * (Config.EnergyRegenRate / 100f / 60));
                 }
             }
 
-            this._lastEnergy.Value = player.Stamina;
+            _lastEnergy.Value = player.Stamina;
 
-            if (!player.hasBuff(this._buffId) || !player.isMoving() || !Context.IsPlayerFree)
+            if (!player.hasBuff(_buffId) || !player.isMoving() || !Context.IsPlayerFree || Game1.isFestival())
                 return;
 
             float energyDrainPerSecond = Config.EnergyDrainPerSecond;
@@ -288,6 +294,16 @@ namespace Sprinting
 
             Farmer player = Game1.player;
 
+            if (player.Stamina <= Config.EnergyToWarn && Config.SprintingKey.IsDown() && !_staminaWarned && Config.LowEnergyWarning)
+            {
+                Game1.addHUDMessage(new HUDMessage(GetFromi18n("message.lowenergy"), HUDMessage.error_type));
+                _staminaWarned = true;
+            }
+            else if (player.Stamina >= Config.EnergyToWarn * 1.4 && _staminaWarned && Config.LowEnergyWarning)
+            {
+                _staminaWarned = false;
+            }
+
             bool canRegen = Context.IsMultiplayer? Game1.currentLocation != null : Context.IsPlayerFree;
 
             if (canRegen)
@@ -296,18 +312,18 @@ namespace Sprinting
 
                 if (currentHealthRatio < Config.MaxHealthRegen && Config.HealthRegenRate > 0f)
                 {
-                    if (player.health < this._lastHealth.Value)
-                        this._healthRegenTimer.Value = Config.HealthRegenCooldown;
-                    else if (this._healthRegenTimer.Value > 0)
-                        --this._healthRegenTimer.Value;
+                    if (player.health < _lastHealth.Value)
+                        _healthRegenTimer.Value = Config.HealthRegenCooldown;
+                    else if (_healthRegenTimer.Value > 0)
+                        --_healthRegenTimer.Value;
                     else
                         player.health = Math.Min(player.maxHealth, player.health + (int)(player.maxHealth * (Config.HealthRegenRate / 100f)));
                 }
 
-                this._lastHealth.Value = player.health;
+                _lastHealth.Value = player.health;
 
-                if (this._energyRegenTimer.Value > 0)
-                    --this._energyRegenTimer.Value;
+                if (_energyRegenTimer.Value > 0)
+                    --_energyRegenTimer.Value;
             }
         }
     }
