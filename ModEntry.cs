@@ -1,5 +1,4 @@
-﻿using GenericModConfigMenu;
-using Microsoft.Xna.Framework.Graphics;
+﻿using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewModdingAPI.Utilities;
@@ -23,6 +22,15 @@ namespace Sprinting
         private bool _staminaWarned = false;
         private bool _sprintOn = false;
         private string _buffId = "onemix.Sprinting_sprinting";
+        private Buff _sprintBuff;
+
+        private void InvalidateSprintBuff()
+        {
+            _sprintBuff = null;
+
+            if (Context.IsWorldReady && Game1.player is not null)
+                Game1.player.buffs.Remove(_buffId);
+        }
 
         public override void Entry(IModHelper helper)
         {
@@ -48,7 +56,10 @@ namespace Sprinting
                 configMenu.Register(
                     mod: this.ModManifest,
                     reset: () => Config = new ModConfig(),
-                    save: () => this.Helper.WriteConfig(Config)
+                    save: () => {
+                        this.Helper.WriteConfig(Config);
+                        this.InvalidateSprintBuff();
+                    }
                 );
                 configMenu.AddKeybindList(
                     mod: this.ModManifest,
@@ -63,12 +74,6 @@ namespace Sprinting
                     getValue: () => Config.KeyIsToggle,
                     setValue: value => Config.KeyIsToggle = value
                 );
-                configMenu.AddBoolOption(
-                    mod: this.ModManifest,
-                    name: () => GetFromi18n("config.cansprintexhausted.name"),
-                    getValue: () => Config.CanSprintExhausted,
-                    setValue: value => Config.CanSprintExhausted = value
-                );
                 configMenu.AddNumberOption(
                     mod: this.ModManifest,
                     name: () => GetFromi18n("config.speedbonus.name"),
@@ -76,6 +81,23 @@ namespace Sprinting
                     setValue: value => Config.SpeedBoost = value,
                     min: 0,
                     max: 10
+                );
+                configMenu.AddBoolOption(
+                    mod: this.ModManifest,
+                    name: () => GetFromi18n("config.allowhorsesprinting.name"),
+                    getValue: () => Config.AllowHorseSprinting,
+                    setValue: value => Config.AllowHorseSprinting = value
+                );
+                configMenu.AddBoolOption(
+                    mod: this.ModManifest,
+                    name: () => GetFromi18n("config.cansprintexhausted.name"),
+                    getValue: () => Config.CanSprintExhausted,
+                    setValue: value => Config.CanSprintExhausted = value
+                );
+
+                configMenu.AddSectionTitle(
+                    mod: this.ModManifest,
+                    text: () => this.Helper.Translation.Get("config.section.energyconsumption")
                 );
                 configMenu.AddNumberOption(
                     mod: this.ModManifest,
@@ -93,12 +115,6 @@ namespace Sprinting
                     tooltip: () => GetFromi18n("config.skillbased.tooltip"),
                     getValue: () => Config.SkillBased,
                     setValue: value => Config.SkillBased = value
-                );
-                configMenu.AddBoolOption(
-                    mod: this.ModManifest,
-                    name: () => GetFromi18n("config.allowhorsesprinting.name"),
-                    getValue: () => Config.AllowHorseSprinting,
-                    setValue: value => Config.AllowHorseSprinting = value
                 );
                 configMenu.AddNumberOption(
                     mod: this.ModManifest,
@@ -118,6 +134,11 @@ namespace Sprinting
                     name: () => GetFromi18n("config.energytowarn.name"),
                     getValue: () => Config.EnergyToWarn,
                     setValue: value => Config.EnergyToWarn = value
+                );
+
+                configMenu.AddSectionTitle(
+                    mod: this.ModManifest,
+                    text: () => this.Helper.Translation.Get("config.section.energyregen")
                 );
                 configMenu.AddBoolOption(
                     mod: this.ModManifest,
@@ -151,6 +172,11 @@ namespace Sprinting
                     tooltip: () => GetFromi18n("config.energyregencooldown.tooltip"),
                     getValue: () => Config.EnergyRegenCooldown,
                     setValue: value => Config.EnergyRegenCooldown = value
+                );
+
+                configMenu.AddSectionTitle(
+                    mod: this.ModManifest,
+                    text: () => this.Helper.Translation.Get("config.section.healthregen")
                 );
                 configMenu.AddNumberOption(
                     mod: this.ModManifest,
@@ -208,8 +234,6 @@ namespace Sprinting
             return player.Stamina >= Config.MinimumEnergyToSprint;
         }
 
-        private Buff _sprintBuff;
-
         private void ApplySprintBuff(Farmer player)
         {
             if (CanSprint(player))
@@ -227,7 +251,7 @@ namespace Sprinting
                     }
                 );
 
-                Buff buff = Game1.buffsDisplay.GetSortedBuffs().Where(x => x.id == _buffId).FirstOrDefault();
+                Buff buff = Game1.buffsDisplay.GetSortedBuffs().FirstOrDefault(x => x.id == _buffId);
                 if (buff is not null)
                 {
                     buff.millisecondsDuration = 100;
@@ -308,7 +332,7 @@ namespace Sprinting
 
             if (canRegen)
             {
-                float currentHealthRatio = player.health / player.maxHealth;
+                float currentHealthRatio = player.health / (float)player.maxHealth;
 
                 if (currentHealthRatio < Config.MaxHealthRegen && Config.HealthRegenRate > 0f)
                 {
@@ -317,7 +341,7 @@ namespace Sprinting
                     else if (_healthRegenTimer.Value > 0)
                         --_healthRegenTimer.Value;
                     else
-                        player.health = Math.Min(player.maxHealth, player.health + (int)(player.maxHealth * (Config.HealthRegenRate / 100f)));
+                        player.health = (int)Math.Min(player.maxHealth, player.health + Math.Ceiling(player.maxHealth * (Config.HealthRegenRate / 100f)));
                 }
 
                 _lastHealth.Value = player.health;
